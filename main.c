@@ -7,7 +7,7 @@ typedef unsigned long long uint64;
 int64 getrip() {
     register int64 ip;
     asm volatile (
-    "movq 0x10(%%rbp), %0\n\t"
+    "movq 0x10(%%rsp), %0\n\t"
     :"=r"(ip)
     );
     return ip;
@@ -20,7 +20,7 @@ struct thread {
     uint64 sp;
     uint64 ip;
     uint64 bp;
-};
+}
 
 
 struct pcb {
@@ -62,27 +62,26 @@ void start_kernel() {
     pid = 0;
     my_current_task = &task[pid];
     asm volatile(
-    "movq %1,%%rsp\n\t"    /* set task[pid].thread.sp to esp */
-    "pushq %%rsp\n\t"            /* push ebp */
+    "movq %1,%%rsp\n\t"    // set task[pid].thread.sp to sp
+    "pushq %%rsp\n\t"         // push bp
     "movq %%rsp,%%rbp\n\t"
-    "pushq %0\n\t"            /* push task[pid].thread.ip */
-    "retq\n\t"                /* pop task[pid].thread.ip to eip */
+    "pushq %0\n\t"            // push task[pid].thread.ip
+    "retq\n\t"                // pop task[pid].thread.ip to ip
     :
-    : "m" (task[pid].t.ip), "m" (task[pid].t.sp)    /* input c or d mean %ecx/%edx*/
+    : "m" (task[pid].t.ip), "m" (task[pid].t.sp)
     );
 }
 
 
 void process(void) {
-    printf("test\n");
+
     int i;
-//    my_current_task->t.ip = getrip();
     while (1) {
         printf("PID %d  running\n", my_current_task->pid);
         i++;
         if (i % 10000 == 0) {
             need_schedule = 1;
-            my_schedule();
+            schedule();
         }
 
     }
@@ -96,6 +95,7 @@ void schedule() {
     struct pcb *next;
 
     curr = my_current_task;
+    curr->t.ip = getrip();
 
     if (need_schedule) {
 
@@ -103,16 +103,17 @@ void schedule() {
 
 
         printf("begin schedule pid : %d \n", curr->pid);
+        printf("pid : %d rip : %x rsp : %x rbp : %x ", curr->pid, curr->t.ip, curr->t.sp, curr->t.bp);
 
         need_schedule = 0;
         my_current_task = next;
         asm volatile(
         "movq %%rbp ,%2\n\t"   // save bp
         "movq %%rsp,%0\n\t"    // save sp
-        "movq %3,%%rsp\n\t"    //restore  esp
+        "movq %3,%%rsp\n\t"    //restore  sp
         "movq %5,%%rbp\n\t"
         "pushq %4\n\t"
-        "ret\n\t"              //restore  eip
+        "retq\n\t"              //restore  ip
         :"=m"(curr->t.sp), "=m"(curr->t.ip), "=m"(curr->t.bp)
         : "m"(next->t.sp), "m"(next->t.ip), "m"(next->t.bp)
         );
