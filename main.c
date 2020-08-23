@@ -20,7 +20,7 @@ struct thread {
     uint64 sp;
     uint64 ip;
     uint64 bp;
-}
+};
 
 
 struct pcb {
